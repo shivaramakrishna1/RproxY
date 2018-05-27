@@ -1,0 +1,154 @@
+---
+# tasks file for reverseproxy
+
+- name: update-ing yum
+  yum: name=* state=latest
+
+- name: checking command setenforce 0
+  command: setenforce 0
+
+# Disable SELinux
+- selinux:
+    state: disabled
+
+- name: Download epel from site
+  get_url:
+    url: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    dest: /root/
+
+- name: Install epel package.
+  yum:
+     name: /root/epel-release-latest-7.noarch.rpm
+     state: present
+
+- name: Download remi repositry from site
+  get_url:
+    url: http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
+    dest: /root/
+
+- name: Install remi package.
+  yum:
+     name: /root/remi-release-7.rpm
+     state: present
+
+- name: update-ing yum
+  yum: name=* state=latest
+
+- name: install the latest version of wget
+  yum:
+    name: wget
+    state: latest
+
+- name: installing php7 using remi package
+  command: yum --enablerepo=remi-php72 install php -y  warn=False
+
+# installing httpd ,httpd-devel packages
+- yum: state=present name={{ item }}
+  with_items:
+   - httpd
+   - httpd-devel
+
+# copying http.conf.j2 file
+
+- template:
+    src: httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+   # mode: 0644
+
+- command: "{{ item }}"
+  with_items:
+    - apachectl configtest
+    - systemctl start httpd.service
+    - systemctl enable httpd.service 
+
+- name: install the latest version of firewalld
+  yum:
+    name: firewalld
+    state: latest
+
+- command: "{{ item }}"
+  with_items:
+    - systemctl start firewalld
+    - firewall-cmd --permanent --add-port=80/tcp
+    - firewall-cmd --permanent --add-port=8080/tcp
+    - firewall-cmd --permanent --zone=public --add-service=http
+    - firewall-cmd --permanent --zone=public --add-service=https
+    - firewall-cmd --reload
+
+
+- name: install the latest version of nginx
+  yum:
+    name: nginx
+    state: latest
+
+- name: Create a new file
+  file: path=/etc/nginx/conf.d/demo.conf state=touch
+
+- template:
+    src: demo.conf.j2
+    dest: /etc/nginx/conf.d/demo.conf
+    #mode: 0644
+
+- name: running nginx -t command
+  command: nginx -t
+
+- command: "{{ item }}"
+  with_items:
+    - systemctl start nginx
+    - systemctl enable nginx
+    - yum install make gcc automake zlib-devel bison cmake libtool wget gcc-c++ unzip ncurses-devel openssl-devel pcre-devel libxml2-devel curl-devel gd-devel libxslt- devel libjpeg-devel -y
+
+- name: Download mod_rpaf-0.6.tar.gz
+  get_url:
+    url: http://mirror.trouble-free.net/sources/mod_rpaf-0.6.tar.gz
+    dest: /root/
+
+- name: Unarchive mod_rpaf-0.6.tar.gz a file that is already on the remote machine
+  unarchive:
+    src: /root/mod_rpaf-0.6.tar.gz
+    dest: /root/
+    remote_src: yes
+
+- name: example copying file with owner and permissions
+  copy:
+    src: mod_rpaf-2.4.c
+    dest: /root/mod_rpaf-0.6/
+
+
+- replace:
+      dest: /root/mod_rpaf-0.6/mod_rpaf-2.4.c
+      regexp: "'s/remote_/client_/g' mod_rpaf-2.4.c"
+
+- replace:
+      dest: /root/mod_rpaf-0.6/mod_rpaf-2.4.c
+      regexp: apxs -c -n mod_rpaf-2.4.so mod_rpaf-2.4.c
+
+- replace:
+      dest: /root/mod_rpaf-0.6/mod_rpaf-2.4.c
+      regexp: apxs -i -c -n mod_rpaf-2.4.so mod_rpaf-2.4.c
+
+- name: Create a new file at /etc/httpd/conf.d/ location
+  file: path=/etc/httpd/conf.d/mod_rpaf.conf state=touch
+
+- template:
+    src: mod_rpaf.conf.j2
+    dest: /etc/httpd/conf.d/mod_rpaf.conf
+   # mode: 0644
+
+- name: Create a new file
+  file: path=/var/www/html/info.php state=touch
+
+- template:
+    src: info.php.j2
+    dest: /var/www/html/info.php
+    #mode: 0644
+
+
+- name: executing httpd restart session
+  command: systemctl start httpd.service
+
+- name: executing httpd enable command 
+  command: systemctl enable httpd.service
+
+- name: executing nginx restart session
+  command: systemctl restart nginx
